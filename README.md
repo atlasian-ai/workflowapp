@@ -1,6 +1,6 @@
-# WorkflowApp — PoC
+# Forgeflow — PoC
 
-A multi-tenant SaaS workflow management platform. Admins define business process workflows as JSON schemas, publish them, and users run instances through sequential form-fill → approval cycles.
+A multi-tenant SaaS workflow management platform. Admins define business process workflows, publish them, and users run instances through sequential form-fill → approval cycles.
 
 ---
 
@@ -11,10 +11,20 @@ A multi-tenant SaaS workflow management platform. Admins define business process
 | Backend | FastAPI + SQLAlchemy 2.x async |
 | Database | Supabase Postgres |
 | Auth | Supabase Auth (JWT) |
-| File Storage | Cloudflare R2 |
+| File Storage | Supabase Storage |
 | Background Tasks | Celery + Upstash Redis |
 | OCR | Claude API (claude-haiku-4-5) |
 | Frontend | React 18 + Vite + Tailwind + Shadcn |
+
+---
+
+## Cloud Platform Summary
+
+| Platform | Role | What it does |
+|---|---|---|
+| **Supabase** | Database + Auth + Storage | Hosts the Postgres database, handles user authentication (JWT), and stores all uploaded files in Supabase Storage buckets |
+| **Upstash** | Redis (message broker) | Provides the Redis instance used by Celery as a message broker and result backend for background OCR tasks |
+| **Railway** | Hosting (backend + frontend) | Hosts the FastAPI backend (Docker container running Uvicorn + Celery) and serves the React frontend as a static web service |
 
 ---
 
@@ -44,7 +54,7 @@ workflowapp/
 
 ---
 
-## Setup
+## Local Development Setup
 
 ### 1. Supabase
 
@@ -58,19 +68,14 @@ workflowapp/
    ```
    postgresql+asyncpg://postgres:[password]@db.[ref].supabase.co:5432/postgres
    ```
+4. Create a Storage bucket named `workflow-files` (or your chosen bucket name)
 
-### 2. Cloudflare R2
-
-1. Create an R2 bucket at [dash.cloudflare.com](https://dash.cloudflare.com) → R2
-2. Create an API token with R2 permissions
-3. Enable public access if you want public file URLs
-
-### 3. Upstash Redis
+### 2. Upstash Redis
 
 1. Create a Redis database at [console.upstash.com](https://console.upstash.com)
-2. Copy the `UPSTASH_REDIS_URL` (TLS URL)
+2. Copy the **TLS URL** (starts with `rediss://`) — this is your `UPSTASH_REDIS_URL`
 
-### 4. Backend
+### 3. Backend
 
 ```bash
 cd backend
@@ -89,7 +94,7 @@ uvicorn app.main:app --reload --port 8000
 celery -A app.workers.celery_app worker --loglevel=info
 ```
 
-### 5. Frontend
+### 4. Frontend
 
 ```bash
 cd frontend
@@ -97,13 +102,46 @@ cp .env.example .env
 # Fill in VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_API_URL
 
 npm install
-
-# Install Shadcn components
-npx shadcn-ui@latest init
-npx shadcn-ui@latest add button input label select badge card dialog
-
 npm run dev
 ```
+
+---
+
+## Deployment (Railway)
+
+Both backend and frontend are deployed on [Railway](https://railway.app).
+
+### Backend service (`workflowapp-api`)
+- **Runtime:** Docker (uses `backend/Dockerfile`)
+- **Root directory:** `backend`
+- **Start:** `bash start.sh` — launches Celery worker in background, then Uvicorn in foreground
+- **Required environment variables:**
+
+| Variable | Description |
+|---|---|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_JWT_SECRET` | JWT secret from Supabase → Settings → API |
+| `SUPABASE_SERVICE_KEY` | service_role key from Supabase → Settings → API |
+| `SUPABASE_STORAGE_BUCKET` | Supabase Storage bucket name (default: `workflow-files`) |
+| `DATABASE_URL` | asyncpg connection string from Supabase |
+| `UPSTASH_REDIS_URL` | TLS Redis URL from Upstash (`rediss://...`) |
+| `ANTHROPIC_API_KEY` | API key for Claude OCR |
+| `SECRET_KEY` | Long random string for app security |
+| `FRONTEND_URL` | Railway frontend URL (for CORS) |
+
+### Frontend service (`workflowapp-frontend`)
+- **Runtime:** Node (npm build)
+- **Root directory:** `frontend`
+- **Build command:** `npm install && npm run build`
+- **Start command:** `npx serve dist`
+- **Required environment variables:**
+
+| Variable | Description |
+|---|---|
+| `VITE_SUPABASE_URL` | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | anon key from Supabase → Settings → API |
+| `VITE_SUPABASE_STORAGE_BUCKET` | Supabase Storage bucket name |
+| `VITE_API_URL` | Railway backend URL (e.g. `https://workflowapp-api-xxxx.up.railway.app`) |
 
 ---
 
@@ -112,7 +150,7 @@ npm run dev
 The workflow definition is a JSON array of steps. Each step has:
 - `step_id` — integer ordering
 - `step_label` — display name
-- `approvers` — list of `"group:name"` or `"user:email"` specs
+- `approvers` — list of `"group:name"` or `"user:email"` specs (bare emails also accepted)
 - `form_fields` — array of field definitions
 
 ### Supported Field Types
@@ -126,7 +164,7 @@ The workflow definition is a JSON array of steps. Each step has:
 | `dropdown` | Select from options (inline or `list_name`) |
 | `radio` | Radio button group |
 | `checkbox` | Single checkbox or multi-option |
-| `file_upload` | File upload to R2 |
+| `file_upload` | File upload to Supabase Storage |
 | `ocr_reader` | Upload document → Claude extracts fields → auto-populates |
 | `calculated` | Auto-computed from formula (e.g. `"f008 * f009"`) |
 | `table` | Editable data table with calculated columns |
@@ -142,7 +180,7 @@ The workflow definition is a JSON array of steps. Each step has:
 | `reviewer` | Approve/reject steps |
 | `approver` | Approve/reject steps |
 
-First user to sign up is automatically made **admin**.
+The first user to sign in is automatically made **admin**. New users must be added directly via **Supabase → Authentication → Users → Add user** (sign-up is disabled on the login page).
 
 ---
 
@@ -170,8 +208,9 @@ POST /instances/{id}/steps/{step_id}/submit   Submit step form
 GET  /approvals/pending       Get my pending approvals
 POST /approvals/{instance_id}/steps/{step_id}   Approve/reject
 
-POST /files/upload            Upload file to R2
+POST /files/register          Register a file uploaded to Supabase Storage
+GET  /files/download          Stream a file from Supabase Storage
 POST /files/ocr               Extract fields from document via Claude
 ```
 
-Full API docs available at `http://localhost:8000/docs` when backend is running.
+Full API docs available at `https://workflowapp-api-xxxx.up.railway.app/docs` when deployed.
