@@ -8,10 +8,8 @@ export default function Login() {
   const { user } = useAuthStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [message, setMessage] = useState('')
 
   if (user) return <Navigate to="/" replace />
 
@@ -19,17 +17,10 @@ export default function Login() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    setMessage('')
 
     try {
-      if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({ email, password })
-        if (error) throw error
-        setMessage('Check your email for a confirmation link.')
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password })
-        if (error) throw error
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) throw error
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Authentication failed')
     } finally {
@@ -47,7 +38,7 @@ export default function Login() {
             textClass="text-3xl font-bold text-blue-900 dark:text-blue-300 tracking-tight"
           />
           <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
-            {mode === 'signin' ? 'Sign in to your account' : 'Create a new account'}
+            Sign in to your account
           </p>
         </div>
 
@@ -84,30 +75,15 @@ export default function Login() {
               </div>
             )}
 
-            {message && (
-              <div className="rounded-md bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 p-3 text-sm text-green-700 dark:text-green-400">
-                {message}
-              </div>
-            )}
-
             <button
               type="submit"
               disabled={loading}
               className="w-full py-2 px-4 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              {loading ? 'Please wait…' : mode === 'signin' ? 'Sign In' : 'Create Account'}
+              {loading ? 'Please wait…' : 'Sign In'}
             </button>
           </form>
 
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(''); setMessage('') }}
-              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-            </button>
-          </div>
         </div>
       </div>
     </div>
