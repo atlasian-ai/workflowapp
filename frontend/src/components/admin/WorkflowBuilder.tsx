@@ -121,7 +121,9 @@ function FieldRow({
             {fieldIdLocked ? (
               <div className="flex items-center gap-1.5 flex-1 border border-gray-200 rounded px-2 py-1 bg-gray-50">
                 <span className="flex-1 text-xs font-mono text-gray-600">{field.field_id}</span>
-                <Lock className="h-3 w-3 text-gray-400 flex-shrink-0" title="Field ID is locked — changing it would orphan saved data in active requests" />
+                <span title="Field ID is locked — changing it would orphan saved data in active requests">
+                  <Lock className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                </span>
               </div>
             ) : (
               <input

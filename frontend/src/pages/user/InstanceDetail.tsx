@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Clock, XCircle, Lock, ShieldCheck, Ban } from 'lucide-react'
@@ -21,12 +21,14 @@ export default function InstanceDetailPage() {
     queryKey: ['instance', id],
     queryFn: () => getInstance(id!),
     enabled: !!id,
-    onSuccess: (data) => {
-      if (!activeStepId && data.current_step_id) {
-        setActiveStepId(data.current_step_id)
-      }
-    },
-  } as Parameters<typeof useQuery>[0])
+  })
+
+  // Set active step to the current step when instance data first loads
+  useEffect(() => {
+    if (instance && !activeStepId && instance.current_step_id) {
+      setActiveStepId(instance.current_step_id)
+    }
+  }, [instance, activeStepId])
 
   const activeStep = instance?.workflow_config?.find((s) => s.step_id === activeStepId)
 
