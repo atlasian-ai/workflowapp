@@ -1,0 +1,314 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 4%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 4%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+
+  /* Supabase-inspired dark palette — very dark, high contrast */
+  .dark {
+    --background: 240 6% 7%;
+    --foreground: 0 0% 97%;
+    --card: 240 5% 11%;
+    --card-foreground: 0 0% 97%;
+    --popover: 240 5% 11%;
+    --popover-foreground: 0 0% 97%;
+    --primary: 217.2 91.2% 60%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 97%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 4% 16%;
+    --accent-foreground: 0 0% 97%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 97%;
+    --border: 240 4% 16%;
+    --input: 240 4% 16%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ─── Global dark-mode overrides ───────────────────────────────────────────────
+   Fixes components that use hardcoded Tailwind color utilities without
+   explicit dark: variants. Safe to apply globally because:
+   - bg-white / bg-gray-N → become dark card/surface colors
+   - text-gray-N → become light text colors
+   - Colored classes (bg-blue-N, text-blue-N etc.) → translucent/lightened
+   Components that already have explicit dark: variants are not affected because
+   they target different class names.
+   ──────────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+  /* Surfaces */
+  .dark .bg-white        { background-color: rgb(18 18 23);  }
+  .dark .bg-gray-50      { background-color: rgb(12 12 17);  }
+  .dark .bg-gray-100     { background-color: rgb(24 24 30);  }
+
+  /* Primary text */
+  .dark .text-gray-900   { color: rgb(250 250 250); }
+  .dark .text-gray-800   { color: rgb(228 228 231); }
+  .dark .text-gray-700   { color: rgb(212 212 216); }
+  .dark .text-gray-600   { color: rgb(161 161 170); }
+
+  /* Borders */
+  .dark .border-gray-100 { border-color: rgb(39 39 46);  }
+  .dark .border-gray-200 { border-color: rgb(39 39 46);  }
+  .dark .border-gray-300 { border-color: rgb(63 63 70);  }
+
+  /* Dividers (table rows, list separators) */
+  .dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(39 39 46); }
+  .dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgb(39 39 46); }
+
+  /* Hover surfaces */
+  .dark .hover\:bg-gray-50:hover   { background-color: rgb(28 28 36);  }
+  .dark .hover\:bg-gray-100:hover  { background-color: rgb(36 36 46);  }
+
+  /* Colored status backgrounds → translucent in dark mode */
+  .dark .bg-blue-50      { background-color: rgba(59,  130, 246, 0.10); }
+  .dark .bg-blue-100     { background-color: rgba(59,  130, 246, 0.15); }
+  .dark .bg-green-50     { background-color: rgba(34,  197,  94, 0.10); }
+  .dark .bg-green-100    { background-color: rgba(34,  197,  94, 0.15); }
+  .dark .bg-red-50       { background-color: rgba(239,  68,  68, 0.10); }
+  .dark .bg-red-100      { background-color: rgba(239,  68,  68, 0.15); }
+  .dark .bg-yellow-50    { background-color: rgba(234, 179,   8, 0.10); }
+  .dark .bg-amber-50     { background-color: rgba(245, 158,  11, 0.10); }
+  .dark .bg-orange-50    { background-color: rgba(249, 115,  22, 0.10); }
+
+  /* Colored text → lighter shades for dark-bg readability */
+  .dark .text-blue-700   { color: rgb(147 197 253); }
+  .dark .text-blue-600   { color: rgb(96  165 250); }
+  .dark .text-green-700  { color: rgb(134 239 172); }
+  .dark .text-green-600  { color: rgb(74  222 128); }
+  .dark .text-red-700    { color: rgb(252 165 165); }
+  .dark .text-red-600    { color: rgb(248 113 113); }
+  .dark .text-amber-600  { color: rgb(251 191  36); }
+  .dark .text-yellow-600 { color: rgb(253 224  71); }
+  .dark .text-orange-600 { color: rgb(251 146  60); }
+
+  /* Colored hover states */
+  .dark .hover\:bg-blue-50:hover   { background-color: rgba(59,  130, 246, 0.15); }
+  .dark .hover\:bg-blue-100:hover  { background-color: rgba(59,  130, 246, 0.20); }
+  .dark .hover\:bg-green-50:hover  { background-color: rgba(34,  197,  94, 0.15); }
+  .dark .hover\:bg-red-50:hover    { background-color: rgba(239,  68,  68, 0.15); }
+  .dark .hover\:bg-yellow-50:hover { background-color: rgba(234, 179,   8, 0.15); }
+
+  /* Pre / code blocks */
+  .dark pre { background-color: rgb(24 24 30); color: rgb(212 212 216); border-color: rgb(39 39 46); }
+}
+
+/* ─── Form element dark mode (input, select, textarea) ────────────────────── */
+.dark select,
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="range"]),
+.dark textarea {
+  background-color: rgb(28 28 36);
+  color: rgb(250 250 250);
+  border-color: rgb(63 63 70);
+}
+.dark select option {
+  background-color: rgb(28 28 36);
+  color: rgb(250 250 250);
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: rgb(113 113 122);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   RETRO TERMINAL THEME
+   Activated by: .retro class on <html>
+   Aesthetic: 1990s green-phosphor CRT terminal
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── CSS variable overrides ─────────────────────────────────────────────── */
+.retro {
+  --background: 0 0% 0%;
+  --foreground: 120 100% 50%;
+  --card: 120 40% 2%;
+  --card-foreground: 120 100% 50%;
+  --popover: 120 40% 2%;
+  --popover-foreground: 120 100% 50%;
+  --primary: 120 100% 50%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 120 40% 5%;
+  --secondary-foreground: 120 100% 50%;
+  --muted: 120 40% 4%;
+  --muted-foreground: 120 80% 28%;
+  --accent: 120 40% 5%;
+  --accent-foreground: 120 100% 50%;
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 0 0% 0%;
+  --border: 120 100% 22%;
+  --input: 120 40% 3%;
+  --ring: 120 100% 50%;
+  --radius: 0rem;
+}
+
+/* ─── Global body overrides: font + CRT scanline overlay ─────────────────── */
+.retro body {
+  font-family: 'Courier New', Courier, monospace !important;
+  background-color: #000000;
+}
+
+/* CRT scanlines rendered as a fixed overlay that doesn't interfere with clicks */
+.retro body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 3px,
+    rgba(0, 0, 0, 0.06) 3px,
+    rgba(0, 0, 0, 0.06) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ─── Monospace + sharp corners everywhere ───────────────────────────────── */
+.retro * {
+  font-family: 'Courier New', Courier, monospace !important;
+  border-radius: 0 !important;
+}
+
+/* ─── Tailwind utility overrides ─────────────────────────────────────────── */
+@layer utilities {
+  /* Surfaces */
+  .retro .bg-white        { background-color: #000000; }
+  .retro .bg-gray-50      { background-color: #020602; }
+  .retro .bg-gray-100     { background-color: #050a05; }
+  .retro .bg-gray-200     { background-color: #0a120a; }
+
+  /* Primary text — glow on the brightest level */
+  .retro .text-gray-900   { color: #00ff41; text-shadow: 0 0 8px rgba(0,255,65,0.45); }
+  .retro .text-gray-800   { color: #00e039; }
+  .retro .text-gray-700   { color: #00cc33; }
+  .retro .text-gray-600   { color: #00aa2a; }
+  .retro .text-gray-500   { color: #008822; }
+  .retro .text-gray-400   { color: #006618; }
+  .retro .text-white      { color: #000000; }
+
+  /* Borders */
+  .retro .border-gray-100 { border-color: #001a00; }
+  .retro .border-gray-200 { border-color: #003300; }
+  .retro .border-gray-300 { border-color: #004d00; }
+
+  /* Dividers */
+  .retro .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #001a00; }
+  .retro .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #003300; }
+
+  /* Hover surfaces */
+  .retro .hover\:bg-gray-50:hover   { background-color: #050a05; }
+  .retro .hover\:bg-gray-100:hover  { background-color: #0a120a; }
+
+  /* Hover text */
+  .retro .hover\:text-gray-600:hover  { color: #00cc33; }
+  .retro .hover\:text-gray-700:hover  { color: #00e039; }
+
+  /* ─── Blue → retro green (primary actions) ───────────────────────────── */
+  .retro .bg-blue-600     { background-color: #006618; }
+  .retro .bg-blue-50      { background-color: rgba(0, 255, 65, 0.07); }
+  .retro .bg-blue-100     { background-color: rgba(0, 255, 65, 0.12); }
+  .retro .border-blue-300 { border-color: #00ff41; }
+  .retro .border-blue-700 { border-color: #00cc33; }
+  .retro .text-blue-700   { color: #00ff41; }
+  .retro .text-blue-600   { color: #00e039; }
+  .retro .text-blue-400   { color: #00cc33; }
+  .retro .hover\:bg-blue-700:hover  { background-color: #00882a; }
+  .retro .hover\:bg-blue-50:hover   { background-color: rgba(0, 255, 65, 0.12); }
+  .retro .hover\:bg-blue-100:hover  { background-color: rgba(0, 255, 65, 0.16); }
+  .retro .hover\:text-blue-600:hover { color: #00ff41; }
+
+  /* ─── Green (success) → bright retro green ───────────────────────────── */
+  .retro .bg-green-600    { background-color: #007722; }
+  .retro .bg-green-50     { background-color: rgba(0, 255, 65, 0.07); }
+  .retro .bg-green-100    { background-color: rgba(0, 255, 65, 0.12); }
+  .retro .text-green-700  { color: #00ff41; }
+  .retro .text-green-600  { color: #00e039; }
+  .retro .hover\:bg-green-700:hover { background-color: #009933; }
+  .retro .hover\:bg-green-50:hover  { background-color: rgba(0, 255, 65, 0.12); }
+
+  /* ─── Red (error / danger) — contrasting magenta-red ─────────────────── */
+  .retro .bg-red-600      { background-color: #880000; }
+  .retro .bg-red-50       { background-color: rgba(255, 0, 64, 0.07); }
+  .retro .bg-red-100      { background-color: rgba(255, 0, 64, 0.12); }
+  .retro .text-red-700    { color: #ff2244; }
+  .retro .text-red-600    { color: #ff2244; }
+  .retro .text-red-500    { color: #ff2244; }
+  .retro .hover\:bg-red-50:hover { background-color: rgba(255, 0, 64, 0.12); }
+
+  /* ─── Amber / yellow / orange → dim green ────────────────────────────── */
+  .retro .bg-amber-50     { background-color: rgba(0, 204, 51, 0.06); }
+  .retro .bg-yellow-50    { background-color: rgba(0, 204, 51, 0.06); }
+  .retro .bg-orange-50    { background-color: rgba(0, 204, 51, 0.06); }
+  .retro .text-amber-600  { color: #00cc33; }
+  .retro .text-yellow-600 { color: #00cc33; }
+  .retro .text-orange-600 { color: #00cc33; }
+  .retro .hover\:text-yellow-600:hover { color: #00e039; }
+  .retro .hover\:bg-yellow-50:hover    { background-color: rgba(0, 204, 51, 0.10); }
+
+  /* ─── Pre / code blocks ──────────────────────────────────────────────── */
+  .retro pre {
+    background-color: #020602;
+    color: #00ff41;
+    border-color: #003300;
+  }
+}
+
+/* ─── Form elements ──────────────────────────────────────────────────────── */
+.retro select,
+.retro input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="range"]),
+.retro textarea {
+  background-color: #000000 !important;
+  color: #00ff41 !important;
+  border-color: #004d00 !important;
+}
+.retro select option {
+  background-color: #020602;
+  color: #00ff41;
+}
+.retro input::placeholder,
+.retro textarea::placeholder {
+  color: #006618 !important;
+}
+.retro input:focus,
+.retro select:focus,
+.retro textarea:focus {
+  outline: none;
+  border-color: #00ff41 !important;
+  box-shadow: 0 0 0 2px rgba(0, 255, 65, 0.35) !important;
+}

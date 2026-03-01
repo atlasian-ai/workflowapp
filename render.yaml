@@ -1,0 +1,44 @@
+services:
+
+  # ── Backend (FastAPI + Celery worker) ───────────────────────────────────────
+  - type: web
+    name: workflowapp-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: workflow-files
+      - key: DATABASE_URL
+        sync: false
+      - key: UPSTASH_REDIS_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true        # Render auto-generates a secure random value
+      - key: FRONTEND_URL
+        sync: false                # Fill in after the frontend service is deployed
+
+  # ── Frontend (React / Vite static site) ─────────────────────────────────────
+  - type: web
+    name: workflowapp-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_SUPABASE_STORAGE_BUCKET
+        value: workflow-files
+      - key: VITE_API_URL
+        sync: false                # Fill in after the backend service is deployed
