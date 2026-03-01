@@ -117,11 +117,11 @@ export default function NotificationsPage() {
                     {n.is_read && <span className="block h-2 w-2" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-sm font-medium text-gray-900 truncate">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mb-0.5">
+                      <span className="text-sm font-medium text-gray-900 truncate max-w-[160px] sm:max-w-none">
                         {n.author_email}
                       </span>
-                      <span className="text-xs text-gray-400 flex-shrink-0">
+                      <span className="text-xs text-gray-400">
                         mentioned you in <span className="font-medium text-gray-600">{n.instance_title}</span>
                       </span>
                     </div>

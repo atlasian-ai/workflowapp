@@ -78,7 +78,7 @@ export default function Profile() {
           </h3>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
           <div>
             <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
               First Name
@@ -152,7 +152,7 @@ export default function Profile() {
           Choose how forgeflow looks to you.
         </p>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {THEMES.map((t) => (
             <button
               key={t.value}

@@ -80,14 +80,14 @@ export default function Approvals() {
           {filtered.map((approval) => (
             <div key={approval.id} className="bg-white rounded-xl border border-gray-200 p-5">
               <div className="flex items-start justify-between gap-4 mb-4">
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-semibold text-gray-900">{approval.instance_title}</h3>
                   <p className="text-sm text-gray-500 mt-0.5">
                     {approval.workflow_name} · <span className="font-medium">{approval.step_label}</span>
                   </p>
-                  <div className="flex gap-4 mt-1 text-xs text-gray-400">
+                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-xs text-gray-400">
                     <span>Submitted by {approval.submitted_by_email}</span>
-                    <span>·</span>
+                    <span className="hidden sm:inline">·</span>
                     <span>{formatDate(approval.created_at)}</span>
                   </div>
                 </div>
@@ -115,7 +115,7 @@ export default function Approvals() {
                       className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() =>
                         decideMutation.mutate({

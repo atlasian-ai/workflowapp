@@ -65,6 +65,7 @@ export default function AdminUsers() {
         <div className="text-center py-12 text-gray-400">Loading…</div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-100">
             <thead className="bg-gray-50">
               <tr>
@@ -125,6 +126,7 @@ export default function AdminUsers() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>
