@@ -150,7 +150,7 @@ export default function AdminWorkflows() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Workflow Definitions</h2>
           <p className="text-sm text-gray-500 mt-1">Create and publish workflow templates</p>
@@ -172,7 +172,7 @@ export default function AdminWorkflows() {
 
       {/* Create / Edit form */}
       {showForm && (
-        <div className="mb-6 bg-white rounded-xl border border-gray-200 p-6">
+        <div className="mb-6 bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
           <h3 className="font-semibold text-gray-900 mb-4">
             {editingId ? 'Edit Workflow' : 'New Workflow'}
           </h3>
@@ -298,7 +298,7 @@ export default function AdminWorkflows() {
         <div className="space-y-3">
           {filtered.map((wf) => (
             <div key={wf.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex flex-wrap items-center justify-between px-4 sm:px-5 py-3 gap-y-2">
                 <div className="flex items-center gap-3 min-w-0">
                   <button
                     onClick={() => setExpandedId(expandedId === wf.id ? null : wf.id)}
@@ -314,7 +314,7 @@ export default function AdminWorkflows() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', statusColor(wf.status))}>
                     {wf.status}
                   </span>
@@ -323,7 +323,7 @@ export default function AdminWorkflows() {
                     <>
                       <span className="flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">
                         <EyeOff className="h-3 w-3" />
-                        Hidden from users
+                        <span className="hidden sm:inline">Hidden from users</span>
                       </span>
                       <button
                         onClick={() => handleEdit(wf)}
@@ -348,7 +348,7 @@ export default function AdminWorkflows() {
                     <>
                       <span className="flex items-center gap-1 text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
                         <Eye className="h-3 w-3" />
-                        Visible to users
+                        <span className="hidden sm:inline">Visible to users</span>
                       </span>
                       <button
                         onClick={() => handleEdit(wf)}
@@ -371,7 +371,7 @@ export default function AdminWorkflows() {
               </div>
 
               {expandedId === wf.id && (
-                <div className="border-t border-gray-100 px-5 py-4">
+                <div className="border-t border-gray-100 px-4 sm:px-5 py-4">
                   <p className="text-xs font-medium text-gray-500 mb-2">Steps:</p>
                   <div className="space-y-2">
                     {wf.config.map((step) => (

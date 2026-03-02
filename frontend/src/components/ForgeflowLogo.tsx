@@ -53,7 +53,9 @@ export default function ForgeflowLogo({
       </svg>
 
       {showWordmark && (
-        <span className={textClass}>forgeflow</span>
+        <span className={textClass}>
+          forgeflow<sup className="text-[0.5em] font-normal tracking-normal align-super ml-0.5 opacity-70">PoC</sup>
+        </span>
       )}
     </div>
   )
