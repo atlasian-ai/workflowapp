@@ -178,6 +178,15 @@ async def trigger_ocr(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="extract_fields must be valid JSON")
 
+    if not isinstance(fields, dict):
+        raise HTTPException(status_code=400, detail="extract_fields must be a JSON object")
+
+    if len(fields) > 10:
+        raise HTTPException(
+            status_code=400,
+            detail="Maximum 10 extraction fields allowed per OCR request (PoC limit).",
+        )
+
     file_bytes = await file.read()
     if len(file_bytes) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File too large (max 20 MB)")

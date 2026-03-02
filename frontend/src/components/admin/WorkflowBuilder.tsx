@@ -12,6 +12,7 @@ const FIELD_TYPES = [
   { value: 'dropdown', label: 'Dropdown' },
   { value: 'checkbox', label: 'Checkbox' },
   { value: 'file_upload', label: 'File Upload' },
+  { value: 'ocr_reader', label: 'OCR Document Reader' },
   { value: 'calculated', label: 'Calculated' },
 ]
 
@@ -26,6 +27,8 @@ export interface FieldConfig {
   list_name?: string
   default?: string
   formula?: string
+  accepted_formats?: string[]
+  extract_fields?: Record<string, string>
 }
 
 export interface StepConfig {
@@ -83,6 +86,8 @@ function FieldRow({
               field_type: t,
               options: t === 'dropdown' ? (field.options ?? []) : undefined,
               formula: t === 'calculated' ? (field.formula ?? '') : undefined,
+              extract_fields: t === 'ocr_reader' ? (field.extract_fields ?? {}) : undefined,
+              accepted_formats: t === 'ocr_reader' ? (field.accepted_formats ?? ['pdf', 'png', 'jpg']) : undefined,
             })
           }}
           className="text-xs border border-gray-200 rounded px-2 py-1 bg-white text-gray-600"
@@ -180,6 +185,122 @@ function FieldRow({
                   <code className="bg-gray-100 px-0.5 rounded">*</code>{' '}
                   <code className="bg-gray-100 px-0.5 rounded">/</code>{' '}
                   and parentheses. Fields from any step in this workflow can be referenced.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* OCR Document Reader configuration */}
+          {field.field_type === 'ocr_reader' && (
+            <div className="space-y-3">
+              {/* Accepted file formats */}
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-gray-500 w-20 flex-shrink-0">Formats</label>
+                <div className="flex gap-3">
+                  {(['pdf', 'png', 'jpg'] as const).map((fmt) => {
+                    const formats = field.accepted_formats ?? ['pdf', 'png', 'jpg']
+                    return (
+                      <label key={fmt} className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={formats.includes(fmt)}
+                          onChange={(e) => {
+                            const current = field.accepted_formats ?? ['pdf', 'png', 'jpg']
+                            const updated = e.target.checked
+                              ? [...current, fmt]
+                              : current.filter((f) => f !== fmt)
+                            onChange({ ...field, accepted_formats: updated.length > 0 ? updated : ['pdf'] })
+                          }}
+                          className="h-3 w-3"
+                        />
+                        <span className="uppercase font-mono">{fmt}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Extraction fields */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-gray-600">
+                    Fields to Extract{' '}
+                    <span className="text-gray-400 font-normal">
+                      ({Object.keys(field.extract_fields ?? {}).length}/10 · max 5-page documents)
+                    </span>
+                  </label>
+                  {Object.keys(field.extract_fields ?? {}).length < 10 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = field.extract_fields ?? {}
+                        let newKey = `field_${Object.keys(current).length + 1}`
+                        while (newKey in current) newKey += '_'
+                        onChange({ ...field, extract_fields: { ...current, [newKey]: '' } })
+                      }}
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      <Plus className="h-3 w-3" /> Add Field
+                    </button>
+                  )}
+                </div>
+
+                {Object.keys(field.extract_fields ?? {}).length > 0 && (
+                  <div className="flex gap-2 mb-1 text-xs text-gray-400 px-0.5">
+                    <span className="w-32 flex-shrink-0">Target Field ID</span>
+                    <span className="flex-1">Description for AI</span>
+                    <span className="w-5 flex-shrink-0" />
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  {Object.entries(field.extract_fields ?? {}).map(([key, desc], idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <input
+                        value={key}
+                        onChange={(e) => {
+                          const entries = Object.entries(field.extract_fields ?? {})
+                          entries[idx] = [e.target.value, desc]
+                          onChange({ ...field, extract_fields: Object.fromEntries(entries) })
+                        }}
+                        placeholder="e.g. vendor_name"
+                        className="w-32 flex-shrink-0 text-xs border border-gray-200 rounded px-2 py-1 font-mono bg-white"
+                      />
+                      <input
+                        value={desc}
+                        onChange={(e) => {
+                          const entries = Object.entries(field.extract_fields ?? {})
+                          entries[idx] = [key, e.target.value]
+                          onChange({ ...field, extract_fields: Object.fromEntries(entries) })
+                        }}
+                        placeholder="e.g. vendor company name on the invoice"
+                        className="flex-1 text-xs border border-gray-200 rounded px-2 py-1 bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const entries = Object.entries(field.extract_fields ?? {}).filter((_, j) => j !== idx)
+                          onChange({ ...field, extract_fields: Object.fromEntries(entries) })
+                        }}
+                        className="text-gray-400 hover:text-red-500 flex-shrink-0"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {Object.keys(field.extract_fields ?? {}).length === 0 && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    ⚠ Add at least one extraction field to enable document reading.
+                  </p>
+                )}
+
+                <p className="text-xs text-gray-400 mt-2 leading-relaxed">
+                  <strong>Target Field ID</strong> must match another field's ID in this workflow —
+                  that field will be auto-populated with the extracted value.{' '}
+                  <strong>Description</strong> tells Claude what to look for
+                  (e.g. "total invoice amount in AUD including tax").
                 </p>
               </div>
             </div>
