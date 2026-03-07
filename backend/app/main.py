@@ -11,6 +11,7 @@ from app.routers import auth as auth_router
 from app.routers.admin import groups as admin_groups
 from app.routers.admin import users as admin_users
 from app.routers.admin import workflows as admin_workflows
+from app.routers.user import ai_chat as user_ai_chat
 from app.routers.user import approvals as user_approvals
 from app.routers.user import comments as user_comments
 from app.routers.user import files as user_files
@@ -70,6 +71,7 @@ app.include_router(user_files.router, prefix="/files", tags=["files"])
 app.include_router(user_comments.router, prefix="/instances", tags=["comments"])
 app.include_router(user_comments.notifications_router, prefix="/notifications", tags=["notifications"])
 app.include_router(user_comments.users_router, prefix="/users", tags=["users"])
+app.include_router(user_ai_chat.router, prefix="/ai/chat", tags=["ai"])
 
 
 @app.get("/health")

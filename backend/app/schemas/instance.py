@@ -23,6 +23,10 @@ class StepAssignmentOut(BaseModel):
     assigned_to: uuid.UUID
     assigned_by: uuid.UUID
     assigned_at: datetime
+    # Resolved display names (joined from users table)
+    assigned_to_name: Optional[str] = None
+    assigned_to_email: Optional[str] = None
+    assigned_by_name: Optional[str] = None
 
 
 class InstanceOut(BaseModel):

@@ -1,7 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Trash2, ChevronDown, ChevronUp, Lock } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronUp, Lock, GripVertical } from 'lucide-react'
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { listAdminReferenceLists } from '@/lib/api'
+import { useAiStore } from '@/hooks/useAiStore'
 import type { ReferenceList } from '@/types/workflow'
 
 const FIELD_TYPES = [
@@ -17,6 +34,7 @@ const FIELD_TYPES = [
 ]
 
 export interface FieldConfig {
+  _id: string           // internal DnD key — not saved to DB
   field_id: string
   field_label: string
   field_type: string
@@ -29,6 +47,7 @@ export interface FieldConfig {
   formula?: string
   accepted_formats?: string[]
   extract_fields?: Record<string, string>
+  _id?: string          // internal DnD key — stripped before saving to DB
 }
 
 export interface StepConfig {
@@ -43,18 +62,26 @@ function generateId() {
   return 'f' + Math.random().toString(36).substring(2, 7)
 }
 
+// ─── FieldRow (sortable) ──────────────────────────────────────────────────────
+
 function FieldRow({
   field,
   onChange,
   onDelete,
   referenceLists,
   fieldIdLocked,
+  dragHandleProps,
+  style,
+  isDragging,
 }: {
   field: FieldConfig
   onChange: (f: FieldConfig) => void
   onDelete: () => void
   referenceLists: ReferenceList[]
   fieldIdLocked?: boolean
+  dragHandleProps?: Record<string, unknown>
+  style?: React.CSSProperties
+  isDragging?: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const [newOption, setNewOption] = useState('')
@@ -68,9 +95,21 @@ function FieldRow({
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg bg-white overflow-hidden">
+    <div
+      style={style}
+      className={`border border-gray-200 rounded-lg bg-white overflow-hidden ${isDragging ? 'opacity-50' : ''}`}
+    >
       {/* Field header row */}
       <div className="flex items-center gap-2 px-3 py-2">
+        {/* Drag handle */}
+        <button
+          type="button"
+          className="flex-shrink-0 text-gray-300 hover:text-gray-500 cursor-grab active:cursor-grabbing touch-none"
+          title="Drag to reorder"
+          {...(dragHandleProps as React.ButtonHTMLAttributes<HTMLButtonElement>)}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
         <input
           value={field.field_label}
           onChange={(e) => onChange({ ...field, field_label: e.target.value })}
@@ -118,7 +157,7 @@ function FieldRow({
       </div>
 
       {/* Expanded details */}
-      {expanded && (
+      {expanded && !isDragging && (
         <div className="border-t border-gray-100 px-3 pb-3 pt-2 space-y-2 bg-gray-50">
           {/* Field ID */}
           <div className="flex items-center gap-2">
@@ -193,7 +232,6 @@ function FieldRow({
           {/* OCR Document Reader configuration */}
           {field.field_type === 'ocr_reader' && (
             <div className="space-y-3">
-              {/* Accepted file formats */}
               <div className="flex items-center gap-2">
                 <label className="text-xs text-gray-500 w-20 flex-shrink-0">Formats</label>
                 <div className="flex gap-3">
@@ -220,7 +258,6 @@ function FieldRow({
                 </div>
               </div>
 
-              {/* Extraction fields */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-medium text-gray-600">
@@ -309,7 +346,6 @@ function FieldRow({
           {/* Dropdown options */}
           {field.field_type === 'dropdown' && (
             <div>
-              {/* Source toggle */}
               <div className="flex items-center gap-2 mb-2">
                 <label className="text-xs text-gray-500 w-20 flex-shrink-0">Source</label>
                 <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs">
@@ -374,7 +410,6 @@ function FieldRow({
                         </button>
                       </div>
                     ))}
-                    {/* Add option row */}
                     <div className="flex gap-2 mt-1">
                       <input
                         value={newOption}
@@ -404,6 +439,38 @@ function FieldRow({
   )
 }
 
+// Sortable wrapper for FieldRow
+function SortableFieldRow(props: Parameters<typeof FieldRow>[0]) {
+  const dndId = props.field._id || props.field.field_id
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: dndId })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 10 : undefined,
+    position: 'relative',
+  }
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <FieldRow
+        {...props}
+        dragHandleProps={{ ...attributes, ...listeners }}
+        isDragging={isDragging}
+      />
+    </div>
+  )
+}
+
+// ─── StepRow ──────────────────────────────────────────────────────────────────
+
 function StepRow({
   step,
   onChange,
@@ -418,9 +485,19 @@ function StepRow({
   lockedFieldIds?: Set<string>
 }) {
   const [expanded, setExpanded] = useState(true)
+  const [activeFieldId, setActiveFieldId] = useState<string | null>(null)
+  // Ensure all fields have a _id for DnD (fields loaded from DB may not have one)
+  const fieldsWithIds = step.form_fields.map((f) =>
+    f._id ? f : { ...f, _id: generateId() }
+  )
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  )
 
   const addField = () => {
     const newField: FieldConfig = {
+      _id: generateId(),
       field_id: generateId(),
       field_label: 'New Field',
       field_type: 'textbox',
@@ -438,6 +515,18 @@ function StepRow({
   const deleteField = (i: number) => {
     onChange({ ...step, form_fields: step.form_fields.filter((_, j) => j !== i) })
   }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveFieldId(null)
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = step.form_fields.findIndex((f) => (f._id || f.field_id) === active.id)
+    const newIndex = step.form_fields.findIndex((f) => (f._id || f.field_id) === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+    onChange({ ...step, form_fields: arrayMove(step.form_fields, oldIndex, newIndex) })
+  }
+
+  const activeField = activeFieldId ? fieldsWithIds.find((f) => f._id === activeFieldId) : null
 
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -481,7 +570,6 @@ function StepRow({
                   })
                 }
                 onBlur={(e) => {
-                  // Normalise bare email addresses to "user:email" format on blur
                   const normalised = e.target.value
                     .split(',')
                     .map((s) => {
@@ -505,7 +593,7 @@ function StepRow({
             </div>
           </div>
 
-          {/* Fields */}
+          {/* Fields with DnD */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-medium text-gray-600">
@@ -518,29 +606,58 @@ function StepRow({
                 <Plus className="h-3 w-3" /> Add Field
               </button>
             </div>
-            <div className="space-y-2">
-              {step.form_fields.map((field, i) => (
-                <FieldRow
-                  key={field.field_id}
-                  field={field}
-                  onChange={(f) => updateField(i, f)}
-                  onDelete={() => deleteField(i)}
-                  referenceLists={referenceLists}
-                  fieldIdLocked={lockedFieldIds?.has(field.field_id)}
-                />
-              ))}
-              {step.form_fields.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4 border-2 border-dashed border-gray-200 rounded-lg">
-                  No fields yet — click "Add Field" to add one.
-                </p>
-              )}
-            </div>
+
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={(e) => setActiveFieldId(String(e.active.id))}
+              onDragEnd={handleDragEnd}
+              onDragCancel={() => setActiveFieldId(null)}
+            >
+              <SortableContext
+                items={fieldsWithIds.map((f) => f._id!)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-2">
+                  {fieldsWithIds.map((field, i) => (
+                    <SortableFieldRow
+                      key={field._id}
+                      field={field}
+                      onChange={(f) => updateField(i, f)}
+                      onDelete={() => deleteField(i)}
+                      referenceLists={referenceLists}
+                      fieldIdLocked={lockedFieldIds?.has(field.field_id)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+
+              <DragOverlay>
+                {activeField ? (
+                  <FieldRow
+                    field={activeField}
+                    onChange={() => {}}
+                    onDelete={() => {}}
+                    referenceLists={referenceLists}
+                    isDragging={false}
+                  />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+
+            {step.form_fields.length === 0 && (
+              <p className="text-xs text-gray-400 text-center py-4 border-2 border-dashed border-gray-200 rounded-lg">
+                No fields yet — click "Add Field" to add one.
+              </p>
+            )}
           </div>
         </div>
       )}
     </div>
   )
 }
+
+// ─── WorkflowBuilder (main export) ───────────────────────────────────────────
 
 export default function WorkflowBuilder({
   steps,
@@ -555,6 +672,15 @@ export default function WorkflowBuilder({
     queryKey: ['admin-reference-lists'],
     queryFn: listAdminReferenceLists,
   })
+
+  // Load AI-generated workflow on mount
+  const { pendingWorkflow, clearPendingWorkflow } = useAiStore()
+  useEffect(() => {
+    if (pendingWorkflow && pendingWorkflow.length > 0) {
+      onChange(pendingWorkflow)
+      clearPendingWorkflow()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addStep = () => {
     const id = steps.length + 1

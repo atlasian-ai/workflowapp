@@ -119,11 +119,18 @@ export default function AdminWorkflows() {
     setEditorMode(mode)
   }
 
+  // Strip internal _id fields before sending to API
+  const stripInternalIds = (steps: StepConfig[]) =>
+    steps.map((step) => ({
+      ...step,
+      form_fields: step.form_fields.map(({ _id: _removed, ...field }) => field),
+    }))
+
   const handleSave = () => {
     setConfigError('')
     let config: unknown
     if (editorMode === 'visual') {
-      config = builderSteps
+      config = stripInternalIds(builderSteps)
     } else {
       try {
         config = JSON.parse(jsonText)
@@ -256,7 +263,7 @@ export default function AdminWorkflows() {
                     setConfigError('')
                     let config: unknown
                     if (editorMode === 'visual') {
-                      config = builderSteps
+                      config = stripInternalIds(builderSteps)
                     } else {
                       try { config = JSON.parse(jsonText) }
                       catch { setConfigError('Invalid JSON — please fix the syntax'); return }

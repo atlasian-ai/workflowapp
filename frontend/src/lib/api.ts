@@ -110,6 +110,13 @@ export const getUnreadCount = () => api.get('/notifications/unread-count').then(
 export const markNotificationRead = (id: string) => api.post(`/notifications/${id}/read`).then((r) => r.data)
 export const markAllNotificationsRead = () => api.post('/notifications/read-all').then((r) => r.data)
 
+// ─── AI Chat ──────────────────────────────────────────────────────────────────
+export const sendAiChat = (
+  message: string,
+  mode: 'data_query' | 'workflow_builder',
+  history: { role: string; content: string }[]
+) => api.post('/ai/chat', { message, mode, history }).then((r) => r.data)
+
 // ─── Files ────────────────────────────────────────────────────────────────────
 
 /** Register a file that the frontend uploaded directly to Supabase Storage. */

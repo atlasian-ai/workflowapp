@@ -8,6 +8,7 @@ import { useAuthStore } from '@/hooks/useAuth'
 import { getUnreadCount } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import ForgeflowLogo from '@/components/ForgeflowLogo'
+import AiChatPanel from '@/components/AiChatPanel'
 
 interface NavItem {
   label: string
@@ -200,6 +201,7 @@ export default function Layout() {
           </div>
         </main>
       </div>
+      <AiChatPanel />
     </div>
   )
 }

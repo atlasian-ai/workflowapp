@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Clock, XCircle, Lock, ShieldCheck, Ban, ChevronDown } from 'lucide-react'
-import { getInstance, getSubmission, getAllSubmissions, saveDraft, submitStep, getStepApprovals, cancelInstance } from '@/lib/api'
-import type { InstanceDetail, WorkflowStep, Approval } from '@/types/workflow'
+import { CheckCircle2, Clock, XCircle, Lock, ShieldCheck, Ban, ChevronDown, UserCheck, UserPlus } from 'lucide-react'
+import { getInstance, getSubmission, getAllSubmissions, saveDraft, submitStep, getStepApprovals, cancelInstance, assignStep, listMentionableUsers } from '@/lib/api'
+import type { InstanceDetail, WorkflowStep, Approval, User } from '@/types/workflow'
 import { useAuthStore } from '@/hooks/useAuth'
 import { formatDate, statusColor } from '@/lib/utils'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,9 @@ export default function InstanceDetailPage() {
   const [activeStepId, setActiveStepId] = useState<number | null>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [stepsOpen, setStepsOpen] = useState(false)
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [assignSearch, setAssignSearch] = useState('')
+  const assignRef = useRef<HTMLDivElement>(null)
 
   const { data: instance, isLoading } = useQuery<InstanceDetail>({
     queryKey: ['instance', id],
@@ -30,6 +33,19 @@ export default function InstanceDetailPage() {
       setActiveStepId(instance.current_step_id)
     }
   }, [instance, activeStepId])
+
+  // Close assign popover on outside click
+  useEffect(() => {
+    if (!assignOpen) return
+    const handler = (e: MouseEvent) => {
+      if (assignRef.current && !assignRef.current.contains(e.target as Node)) {
+        setAssignOpen(false)
+        setAssignSearch('')
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [assignOpen])
 
   const activeStep = instance?.workflow_config?.find((s) => s.step_id === activeStepId)
 
@@ -87,6 +103,22 @@ export default function InstanceDetailPage() {
     },
   })
 
+  const { data: mentionableUsers = [] } = useQuery<User[]>({
+    queryKey: ['mentionable-users'],
+    queryFn: listMentionableUsers,
+    enabled: assignOpen,
+  })
+
+  const assignMutation = useMutation({
+    mutationFn: ({ stepId, userId }: { stepId: number; userId: string }) =>
+      assignStep(id!, stepId, userId),
+    onSuccess: () => {
+      setAssignOpen(false)
+      setAssignSearch('')
+      qc.invalidateQueries({ queryKey: ['instance', id] })
+    },
+  })
+
   if (isLoading) {
     return <div className="text-center py-12 text-gray-400">Loading…</div>
   }
@@ -107,6 +139,7 @@ export default function InstanceDetailPage() {
     if (instance.status !== 'in_progress') return true
     const status = getStepStatus(step)
     if (status === 'pending') return true
+    if (!canEdit) return true
     // Check if already submitted
     return submission?.status === 'submitted'
   }
@@ -114,6 +147,25 @@ export default function InstanceDetailPage() {
   const pendingApproval = approvals.find((a) => !a.decision)
   const approvedApproval = approvals.find((a) => a.decision === 'approved')
   const rejectedApproval = approvals.find((a) => a.decision === 'rejected')
+
+  const isCreator = user?.id === instance?.created_by
+  const isAdmin = user?.role === 'admin'
+  const canAssign = isCreator || isAdmin
+
+  // For the active step, check if there's an assignment
+  const activeAssignment = instance?.assignments?.find((a) => a.step_id === activeStepId)
+
+  // Editability: only the assignee (or creator/admin if unassigned) may edit
+  const isAssignedToMe = activeAssignment ? activeAssignment.assigned_to === user?.id : false
+  const canEdit = activeAssignment ? isAssignedToMe || isAdmin : (isCreator || isAdmin)
+
+  const filteredUsers = mentionableUsers.filter((u) => {
+    const q = assignSearch.toLowerCase()
+    return (
+      u.email.toLowerCase().includes(q) ||
+      (u.full_name ?? '').toLowerCase().includes(q)
+    )
+  })
 
   return (
     <div>
@@ -247,19 +299,70 @@ export default function InstanceDetailPage() {
         <div className="flex-1 min-w-0">
           {activeStep ? (
             <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-6">
-              <div className="flex items-center justify-between mb-5">
-                <div>
+              <div className="flex items-start justify-between mb-5 gap-3">
+                <div className="min-w-0">
                   <h3 className="text-lg font-semibold text-gray-900">{activeStep.step_label}</h3>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {activeStep.form_fields.length} fields
                     {activeStep.approvers.length > 0 && ` · Approvers: ${activeStep.approvers.join(', ')}`}
                   </p>
                 </div>
-                {submission?.status === 'submitted' && (
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
-                    Submitted
-                  </span>
-                )}
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                  {submission?.status === 'submitted' && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                      Submitted
+                    </span>
+                  )}
+                  {/* Assignment chip */}
+                  {activeAssignment ? (
+                    <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      <UserCheck className="h-3 w-3" />
+                      {activeAssignment.assigned_to_name ?? activeAssignment.assigned_to_email ?? 'Assigned'}
+                    </span>
+                  ) : null}
+                  {/* Assign button — creator or admin only, active steps */}
+                  {canAssign && instance.status === 'in_progress' && getStepStatus(activeStep) === 'active' && (
+                    <div className="relative" ref={assignRef}>
+                      <button
+                        onClick={() => setAssignOpen((o) => !o)}
+                        className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors"
+                      >
+                        <UserPlus className="h-3 w-3" />
+                        {activeAssignment ? 'Reassign' : 'Assign'}
+                      </button>
+                      {assignOpen && (
+                        <div className="absolute right-0 top-full mt-1 w-64 bg-white rounded-lg border border-gray-200 shadow-lg z-20">
+                          <div className="p-2 border-b border-gray-100">
+                            <input
+                              autoFocus
+                              type="text"
+                              placeholder="Search users…"
+                              value={assignSearch}
+                              onChange={(e) => setAssignSearch(e.target.value)}
+                              className="w-full text-sm px-2 py-1.5 border border-gray-200 rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+                          </div>
+                          <ul className="max-h-48 overflow-y-auto divide-y divide-gray-50">
+                            {filteredUsers.length === 0 ? (
+                              <li className="px-3 py-2 text-xs text-gray-400">No users found</li>
+                            ) : filteredUsers.map((u) => (
+                              <li key={u.id}>
+                                <button
+                                  onClick={() => assignMutation.mutate({ stepId: activeStepId!, userId: u.id })}
+                                  disabled={assignMutation.isPending}
+                                  className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors"
+                                >
+                                  <p className="text-sm font-medium text-gray-800">{u.full_name ?? u.email}</p>
+                                  {u.full_name && <p className="text-xs text-gray-400">{u.email}</p>}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Rejection banner — shown when the step was rejected and submission was
@@ -312,6 +415,18 @@ export default function InstanceDetailPage() {
                       </span>
                     </div>
                   ) : null}
+                </div>
+              )}
+
+              {/* Delegation notice for viewers who aren't the assignee */}
+              {activeAssignment && !isAssignedToMe && !isAdmin && instance.status === 'in_progress' && getStepStatus(activeStep) === 'active' && (
+                <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <UserCheck className="h-4 w-4 flex-shrink-0 text-amber-600" />
+                  <span>
+                    This step is assigned to{' '}
+                    <strong>{activeAssignment.assigned_to_name ?? activeAssignment.assigned_to_email}</strong>.
+                    You can view but not edit this step.
+                  </span>
                 </div>
               )}
 

@@ -85,6 +85,9 @@ export interface StepAssignment {
   assigned_to: string
   assigned_by: string
   assigned_at: string
+  assigned_to_name: string | null
+  assigned_to_email: string | null
+  assigned_by_name: string | null
 }
 
 export interface StepSubmission {
