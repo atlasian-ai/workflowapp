@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Sparkles, X, Send, Loader2, ChevronRight } from 'lucide-react'
+import { Sparkles, X, Send, Loader2, CheckCircle2, AlertCircle } from 'lucide-react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
-import { sendAiChat } from '@/lib/api'
-import { useAiStore } from '@/hooks/useAiStore'
+import { sendAiChat, createWorkflow } from '@/lib/api'
 import type { StepConfig } from '@/components/admin/WorkflowBuilder'
+
+const STORAGE_KEY = 'forgeflow_ai_chat_messages'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -12,24 +14,46 @@ interface Message {
   workflowDefinition?: StepConfig[] | null
 }
 
+function loadMessages(): Message[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+function saveMessages(msgs: Message[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs))
+  } catch {
+    // localStorage quota exceeded — silently ignore
+  }
+}
+
 export default function AiChatPanel() {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
-  const [messages, setMessages] = useState<Message[]>([])
+  const [messages, setMessages] = useState<Message[]>(loadMessages)
   const [loading, setLoading] = useState(false)
+  const [createdId, setCreatedId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const location = useLocation()
   const navigate = useNavigate()
-  const { setPendingWorkflow } = useAiStore()
+  const qc = useQueryClient()
 
   const isWorkflowBuilderMode = location.pathname.startsWith('/admin/workflows')
   const mode = isWorkflowBuilderMode ? 'workflow_builder' : 'data_query'
-
   const modeLabel = isWorkflowBuilderMode ? 'Workflow Builder' : 'Data Query'
   const placeholder = isWorkflowBuilderMode
     ? 'Describe a workflow to build…'
     : 'Ask about your requests…'
+
+  // Persist messages to localStorage whenever they change
+  useEffect(() => {
+    saveMessages(messages)
+  }, [messages])
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -43,9 +67,20 @@ export default function AiChatPanel() {
     }
   }, [open])
 
-  const handleClose = () => {
-    setOpen(false)
-  }
+  const createMutation = useMutation({
+    mutationFn: (steps: StepConfig[]) => {
+      // Derive a name from the first user message, truncated
+      const firstUserMsg = messages.find((m) => m.role === 'user')?.content ?? ''
+      const name = firstUserMsg.slice(0, 60).trim() || 'AI Generated Workflow'
+      return createWorkflow({ name, description: 'Created by AI assistant', config: steps })
+    },
+    onSuccess: (data) => {
+      setCreatedId(data.id)
+      qc.invalidateQueries({ queryKey: ['admin-workflows'] })
+    },
+  })
+
+  const handleClose = () => setOpen(false)
 
   const handleSend = async () => {
     const text = input.trim()
@@ -56,6 +91,7 @@ export default function AiChatPanel() {
     setMessages(nextMessages)
     setInput('')
     setLoading(true)
+    setCreatedId(null)
 
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }))
@@ -83,10 +119,10 @@ export default function AiChatPanel() {
     }
   }
 
-  const handleApplyWorkflow = (steps: StepConfig[]) => {
-    setPendingWorkflow(steps)
-    setOpen(false)
-    navigate('/admin/workflows')
+  const handleClearChat = () => {
+    setMessages([])
+    setCreatedId(null)
+    localStorage.removeItem(STORAGE_KEY)
   }
 
   return (
@@ -99,6 +135,9 @@ export default function AiChatPanel() {
           title="AI Assistant"
         >
           <Sparkles className="h-5 w-5" />
+          {messages.length > 0 && (
+            <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-green-400 border-2 border-white" />
+          )}
         </button>
       )}
 
@@ -106,10 +145,7 @@ export default function AiChatPanel() {
       {open && (
         <>
           {/* Mobile backdrop */}
-          <div
-            className="fixed inset-0 z-40 bg-black/30 md:hidden"
-            onClick={handleClose}
-          />
+          <div className="fixed inset-0 z-40 bg-black/30 md:hidden" onClick={handleClose} />
 
           <div className="fixed right-0 top-0 z-50 flex h-full w-full flex-col bg-white shadow-2xl sm:w-[380px]">
             {/* Header */}
@@ -121,12 +157,22 @@ export default function AiChatPanel() {
                   <p className="text-xs text-gray-400">{modeLabel} mode</p>
                 </div>
               </div>
-              <button
-                onClick={handleClose}
-                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                {messages.length > 0 && (
+                  <button
+                    onClick={handleClearChat}
+                    className="rounded-md px-2 py-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  onClick={handleClose}
+                  className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -134,7 +180,7 @@ export default function AiChatPanel() {
               {messages.length === 0 && (
                 <div className="text-center text-xs text-gray-400 mt-8">
                   {isWorkflowBuilderMode
-                    ? 'Describe a workflow and I\'ll generate the configuration for you.'
+                    ? "Describe a workflow and I'll create it for you."
                     : 'Ask me anything about your requests and workflows.'}
                 </div>
               )}
@@ -149,16 +195,14 @@ export default function AiChatPanel() {
                     )}
                   >
                     {msg.role === 'assistant' && msg.workflowDefinition ? (
-                      <div>
-                        <p className="mb-2">Workflow generated! Click below to apply it to the builder.</p>
-                        <button
-                          onClick={() => handleApplyWorkflow(msg.workflowDefinition!)}
-                          className="flex items-center gap-1 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                        >
-                          Apply to Builder
-                          <ChevronRight className="h-3 w-3" />
-                        </button>
-                      </div>
+                      <WorkflowActionBubble
+                        steps={msg.workflowDefinition}
+                        onCreateWorkflow={() => createMutation.mutate(msg.workflowDefinition!)}
+                        onViewWorkflows={() => { setOpen(false); navigate('/admin/workflows') }}
+                        isCreating={createMutation.isPending}
+                        createdId={createdId}
+                        error={createMutation.isError ? 'Failed to create workflow.' : null}
+                      />
                     ) : (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     )}
@@ -201,5 +245,64 @@ export default function AiChatPanel() {
         </>
       )}
     </>
+  )
+}
+
+function WorkflowActionBubble({
+  steps,
+  onCreateWorkflow,
+  onViewWorkflows,
+  isCreating,
+  createdId,
+  error,
+}: {
+  steps: StepConfig[]
+  onCreateWorkflow: () => void
+  onViewWorkflows: () => void
+  isCreating: boolean
+  createdId: string | null
+  error: string | null
+}) {
+  const stepCount = steps.length
+  const fieldCount = steps.reduce((n, s) => n + s.form_fields.length, 0)
+
+  if (createdId) {
+    return (
+      <div>
+        <div className="flex items-center gap-1.5 text-green-700 mb-2">
+          <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+          <span className="font-medium text-sm">Workflow created as draft!</span>
+        </div>
+        <button
+          onClick={onViewWorkflows}
+          className="text-xs bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors font-medium"
+        >
+          Open in Workflows
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <p className="mb-1 font-medium">Workflow ready</p>
+      <p className="text-xs text-gray-500 mb-3">
+        {stepCount} step{stepCount !== 1 ? 's' : ''} · {fieldCount} field{fieldCount !== 1 ? 's' : ''}
+      </p>
+      {error && (
+        <div className="flex items-center gap-1 text-xs text-red-600 mb-2">
+          <AlertCircle className="h-3 w-3" />
+          {error}
+        </div>
+      )}
+      <button
+        onClick={onCreateWorkflow}
+        disabled={isCreating}
+        className="flex items-center gap-1.5 text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors font-medium"
+      >
+        {isCreating ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+        {isCreating ? 'Creating…' : 'Create Workflow'}
+      </button>
+    </div>
   )
 }
