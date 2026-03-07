@@ -497,6 +497,11 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
   - Added `_extract_json_array()` helper in `ai_chat.py` — strips markdown code fences, uses regex to find JSON arrays even when model prepends prose
   - When JSON is parsed successfully, backend returns a clean summary reply ("Workflow ready: N steps, M fields.") rather than raw JSON, so the frontend `WorkflowActionBubble` renders correctly
 
+- **fix: DnD field reordering — stable IDs across renders**
+  - Replaced unstable `fieldsWithIds` computed value (generated new random `_id` on every render) with a `useRef`-backed map that assigns a stable `_id` per `field_id` for the lifetime of the `StepRow` component
+  - Fixed `handleDragEnd` to search `fieldsWithIds` (not `step.form_fields`) so the index lookup always succeeds; `arrayMove` now receives `fieldsWithIds` to preserve order correctly
+  - Fixed `updateField` and `deleteField` to also operate on `fieldsWithIds`
+
 ### 2026-03-03
 - **OCR Document Reader field type in admin WorkflowBuilder**
   - Added `ocr_reader` to `FIELD_TYPES` array in `WorkflowBuilder.tsx`
