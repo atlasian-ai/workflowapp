@@ -34,7 +34,7 @@ const FIELD_TYPES = [
 ]
 
 export interface FieldConfig {
-  _id: string           // internal DnD key — not saved to DB
+  _id?: string          // internal DnD key — ephemeral, stripped before saving to DB
   field_id: string
   field_label: string
   field_type: string
@@ -47,7 +47,6 @@ export interface FieldConfig {
   formula?: string
   accepted_formats?: string[]
   extract_fields?: Record<string, string>
-  _id?: string          // internal DnD key — stripped before saving to DB
 }
 
 export interface StepConfig {
