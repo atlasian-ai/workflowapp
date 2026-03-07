@@ -1,5 +1,6 @@
 """AI chat endpoint — data query and workflow builder modes."""
 import json
+import re
 from typing import Any
 
 import anthropic
@@ -17,6 +18,30 @@ from app.models.workflow_definition import WorkflowDefinition
 from app.models.workflow_instance import WorkflowInstance
 
 router = APIRouter()
+
+
+def _extract_json_array(text: str) -> list | None:
+    """Extract a JSON array from a model reply that may include markdown fences or prose."""
+    # Strip markdown code fences (```json ... ``` or ``` ... ```)
+    cleaned = re.sub(r"```(?:json)?\s*", "", text)
+    cleaned = re.sub(r"```", "", cleaned).strip()
+
+    # Direct parse if it starts with [
+    if cleaned.startswith("["):
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+
+    # Find the first [...] block in the text (greedy, handles nested arrays)
+    match = re.search(r"\[[\s\S]*\]", cleaned)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
+
+    return None
 
 
 class ChatMessage(BaseModel):
@@ -164,16 +189,20 @@ async def chat(
         )
         reply_text = response.content[0].text.strip()
 
-        # Try to parse JSON workflow from the reply
-        workflow_definition = None
-        stripped = reply_text.strip()
-        if stripped.startswith("["):
-            try:
-                workflow_definition = json.loads(stripped)
-            except json.JSONDecodeError:
-                pass
+        # Try to extract a JSON workflow array from the reply
+        workflow_definition = _extract_json_array(reply_text)
 
-        return ChatResponse(reply=reply_text, workflow_definition=workflow_definition)
+        if workflow_definition:
+            # Build a clean summary reply instead of exposing raw JSON in the chat bubble
+            step_count = len(workflow_definition)
+            field_count = sum(len(s.get("form_fields", [])) for s in workflow_definition)
+            clean_reply = (
+                f"Workflow ready: {step_count} step{'s' if step_count != 1 else ''}, "
+                f"{field_count} field{'s' if field_count != 1 else ''}."
+            )
+            return ChatResponse(reply=clean_reply, workflow_definition=workflow_definition)
+
+        return ChatResponse(reply=reply_text)
 
     else:
         raise HTTPException(status_code=400, detail=f"Unknown mode: {payload.mode}")
