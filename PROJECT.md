@@ -243,7 +243,7 @@ reference_lists
 |---|---|
 | `src/App.tsx` | Route definitions, role-gated routes |
 | `src/components/Layout.tsx` | Sidebar nav (collapsible on mobile), admin/user sections, hosts `AiChatPanel` overlay |
-| `src/components/AiChatPanel.tsx` | Collapsible AI chat panel — floating button → 380px slide-in; auto-detects mode from route |
+| `src/components/AiChatPanel.tsx` | Collapsible AI chat panel — floating button → 380px slide-in; auto-detects mode from route; persists history to `localStorage`; creates workflows via API |
 | `src/components/ForgeflowLogo.tsx` | Logo with "PoC" superscript, used on login + sidebar |
 | `src/components/admin/WorkflowBuilder.tsx` | Admin step/field builder — the core admin UI |
 | `src/components/form-renderer/DynamicForm.tsx` | Renders a step's fields from config |
@@ -410,7 +410,7 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 | **Admin role management** | Role promotion handled via admin UI to control access |
 | **Step assignment / full delegation** | Instance creator or admin assigns a step to another user; assignee sees the instance in their Dashboard and has exclusive edit/submit rights on that step; others see read-only |
 | **AI chat — synchronous Claude call** | Acceptable latency for PoC; avoids Celery complexity; data_query mode injects user's instances + step data as context; workflow_builder mode returns raw JSON for the WorkflowBuilder |
-| **`useAiStore` Zustand handoff** | AI chat panel stores generated workflow in Zustand; WorkflowBuilder reads it on mount, applies it, then clears the store — cleanly decouples chat from builder without URL params or local storage |
+| **AI chat workflow creation via API** | `workflow_builder` mode creates the workflow directly via `POST /admin/workflows` (saved as draft); `useAiStore` / Zustand handoff is kept but no longer the primary path |
 | **DnD field reordering uses `_id` ephemeral key** | `_id` is generated client-side for stable DnD identity and stripped before saving to DB; fields loaded from DB get `_id` auto-assigned via `fieldsWithIds` |
 | **Status tile click filtering** | Simple `useState` toggle; combined with existing text search; active tile shows ring highlight and clear button above the list |
 
@@ -487,9 +487,11 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 
 - **Feature: AI agent chat panel**
   - Backend: `POST /ai/chat` (`ai_chat.py`) — `data_query` mode fetches user's instances + submitted step data and injects as Claude context; `workflow_builder` mode returns parsed workflow JSON; uses `claude-haiku-4-5-20251001` via existing `ANTHROPIC_API_KEY`
-  - Frontend: `AiChatPanel.tsx` — floating sparkle button → 380px slide-in panel; auto-detects mode from route (`/admin/workflows` → workflow_builder, else data_query); "Apply to Builder" button on workflow responses
-  - Frontend: `useAiStore.ts` — Zustand store for `pendingWorkflow` handoff to `WorkflowBuilder`
-  - `WorkflowBuilder` reads `pendingWorkflow` on mount, applies steps, clears store
+  - Frontend: `AiChatPanel.tsx` — floating sparkle button → 380px slide-in panel; auto-detects mode from route (`/admin/workflows` → workflow_builder, else data_query)
+  - `workflow_builder` responses show step/field count summary + "Create Workflow" button that calls `POST /admin/workflows` to save a draft; navigates to workflows list on success
+  - Chat history persisted to `localStorage` (key: `forgeflow_ai_chat_messages`); green dot on floating button indicates active history; "Clear" button wipes it
+
+- **fix: duplicate `_id` in `FieldConfig` interface** — removed second declaration that caused TS2300 build error
 
 ### 2026-03-03
 - **OCR Document Reader field type in admin WorkflowBuilder**
