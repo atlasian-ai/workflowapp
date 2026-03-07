@@ -88,7 +88,7 @@ ForgeflowPoC is a configurable workflow / form-routing application that lets adm
 | **Railway** | Hosts React SPA, FastAPI API, and Celery worker as three separate services | Auto-deploys from `main` branch push |
 | **Supabase** | Auth (magic link / password), PostgreSQL DB, file Storage | JWT issued by Supabase, verified by backend |
 | **Upstash Redis** | Celery broker and result store | Serverless Redis, free tier sufficient for PoC |
-| **Anthropic API** | Claude Haiku for OCR field extraction | Key stored in Railway backend env vars |
+| **Anthropic API** | Claude Haiku for OCR field extraction and AI chat | Key stored in Railway backend env vars |
 
 ### Railway services
 
@@ -112,6 +112,7 @@ All tables use UUID primary keys (`gen_random_uuid()`). Managed by **Alembic** w
 | `002` | Added `step_comments`, `config_snapshot` on instances |
 | `003` | Added `request_number` (auto-increment), `cancelled` status, cancel reason |
 | `004` | Added `updated_at` to `step_submissions` |
+| `005` | Enabled Row Level Security (RLS) on all 13 public schema tables |
 
 ### Core tables
 
@@ -130,8 +131,12 @@ workflow_definitions
 
 workflow_instances
   id, definition_id → workflow_definitions, title, status (in_progress|completed|cancelled),
-  current_step_id (int), created_by, created_at, completed_at,
-  request_number (serial), cancel_reason, config_snapshot (JSON)
+  current_step_id (int), created_by, created_at, completed_at, cancelled_at,
+  request_number (serial), config_snapshot (JSON)
+
+step_assignments
+  id, instance_id → workflow_instances, step_id (int), assigned_to → users,
+  assigned_by → users, assigned_at
 
 step_submissions
   id, instance_id, step_id, submitted_by, form_data (JSON), status (draft|submitted),
@@ -203,6 +208,7 @@ reference_lists
 | `app/schemas/` | Pydantic v2 request/response schemas |
 | `app/services/workflow_engine.py` | State machine — step activation, approval processing |
 | `app/services/ocr_service.py` | Claude Haiku OCR extraction |
+| `app/routers/user/ai_chat.py` | `POST /ai/chat` — data query and workflow builder AI modes |
 | `app/services/storage_service.py` | Supabase Storage upload/download/URL |
 | `app/workers/celery_app.py` | Celery app config (Upstash Redis) |
 | `app/workers/tasks.py` | `ocr_extract_task` — async OCR Celery task |
@@ -236,7 +242,8 @@ reference_lists
 | Path | Purpose |
 |---|---|
 | `src/App.tsx` | Route definitions, role-gated routes |
-| `src/components/Layout.tsx` | Sidebar nav (collapsible on mobile), admin/user sections |
+| `src/components/Layout.tsx` | Sidebar nav (collapsible on mobile), admin/user sections, hosts `AiChatPanel` overlay |
+| `src/components/AiChatPanel.tsx` | Collapsible AI chat panel — floating button → 380px slide-in; auto-detects mode from route |
 | `src/components/ForgeflowLogo.tsx` | Logo with "PoC" superscript, used on login + sidebar |
 | `src/components/admin/WorkflowBuilder.tsx` | Admin step/field builder — the core admin UI |
 | `src/components/form-renderer/DynamicForm.tsx` | Renders a step's fields from config |
@@ -254,6 +261,7 @@ reference_lists
 | `src/lib/supabase.ts` | Supabase client init |
 | `src/types/workflow.ts` | Shared TypeScript types for workflow config |
 | `src/hooks/useAuth.ts` | Zustand store for auth state |
+| `src/hooks/useAiStore.ts` | Zustand store for `pendingWorkflow` (AI → WorkflowBuilder handoff) |
 
 ### Routing structure
 
@@ -400,6 +408,11 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 | **`extract_fields` as `Record<string,string>`** | Key = target field_id in same step (auto-populates form); value = description for Claude prompt |
 | **Single-file Supabase Storage** uploads | Each file gets a UUID-keyed path; no naming conflicts; URL presigned for download |
 | **Admin role management** | Role promotion handled via admin UI to control access |
+| **Step assignment / full delegation** | Instance creator or admin assigns a step to another user; assignee sees the instance in their Dashboard and has exclusive edit/submit rights on that step; others see read-only |
+| **AI chat — synchronous Claude call** | Acceptable latency for PoC; avoids Celery complexity; data_query mode injects user's instances + step data as context; workflow_builder mode returns raw JSON for the WorkflowBuilder |
+| **`useAiStore` Zustand handoff** | AI chat panel stores generated workflow in Zustand; WorkflowBuilder reads it on mount, applies it, then clears the store — cleanly decouples chat from builder without URL params or local storage |
+| **DnD field reordering uses `_id` ephemeral key** | `_id` is generated client-side for stable DnD identity and stripped before saving to DB; fields loaded from DB get `_id` auto-assigned via `fieldsWithIds` |
+| **Status tile click filtering** | Simple `useState` toggle; combined with existing text search; active tile shows ring highlight and clear button above the list |
 
 ---
 
@@ -431,7 +444,7 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 | `DATABASE_URL` | PostgreSQL connection string (`asyncpg://...`) |
 | `SUPABASE_STORAGE_BUCKET` | Storage bucket name (default: `workflow-files`) |
 | `UPSTASH_REDIS_URL` | Redis URL (`rediss://...` for TLS) |
-| `ANTHROPIC_API_KEY` | Claude API key (for OCR) |
+| `ANTHROPIC_API_KEY` | Claude API key (for OCR and AI chat) |
 | `SECRET_KEY` | App secret (used for signing; can be any random string) |
 | `FRONTEND_URL` | Railway frontend service URL (used for CORS) |
 
@@ -447,6 +460,36 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 ---
 
 ## 14. Changelog
+
+### 2026-03-07
+
+- **Row Level Security (RLS) enabled on all tables**
+  - Migration `005_enable_rls.py` enables RLS on all 13 public schema tables
+  - FastAPI backend uses PostgreSQL superuser credentials, bypassing RLS transparently
+  - No permissive policies added — backend access unaffected, direct DB access restricted
+
+- **Feature: Drag-and-drop field reordering in WorkflowBuilder**
+  - Installed `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`
+  - `FieldConfig` gains optional `_id` ephemeral key for DnD stability (stripped before DB save)
+  - `SortableFieldRow` wraps `FieldRow` with `useSortable`; `GripVertical` drag handle added
+  - `handleDragEnd` reorders via `arrayMove`; `stripInternalIds()` applied in both save paths in `Workflows.tsx`
+
+- **Feature: Step assignment / full delegation**
+  - Backend: `list_my_instances` extended with left join on `step_assignments` + `or_` filter + `.distinct()` so assigned users see instances in their Dashboard
+  - Backend: `get_instance` access control extended to include assigned users; `StepAssignmentOut` enriched with `assigned_to_name`, `assigned_to_email`, `assigned_by_name` resolved from DB
+  - Frontend: `InstanceDetail.tsx` shows assignment chip on active step; creator/admin gets "Assign/Reassign" button with searchable user picker popover; only the assignee (or creator/admin if unassigned) can edit/submit; delegation notice shown to viewers
+  - Frontend: `Dashboard.tsx` shows "Delegated" badge on instances where current user is not the creator
+
+- **Feature: Clickable status tiles in Dashboard**
+  - Status tiles are now `<button>` elements that toggle a `statusFilter` state
+  - Active tile highlighted with `ring-2` matching the status colour
+  - Filter applied alongside existing text search; active filter shows clear button
+
+- **Feature: AI agent chat panel**
+  - Backend: `POST /ai/chat` (`ai_chat.py`) — `data_query` mode fetches user's instances + submitted step data and injects as Claude context; `workflow_builder` mode returns parsed workflow JSON; uses `claude-haiku-4-5-20251001` via existing `ANTHROPIC_API_KEY`
+  - Frontend: `AiChatPanel.tsx` — floating sparkle button → 380px slide-in panel; auto-detects mode from route (`/admin/workflows` → workflow_builder, else data_query); "Apply to Builder" button on workflow responses
+  - Frontend: `useAiStore.ts` — Zustand store for `pendingWorkflow` handoff to `WorkflowBuilder`
+  - `WorkflowBuilder` reads `pendingWorkflow` on mount, applies steps, clears store
 
 ### 2026-03-03
 - **OCR Document Reader field type in admin WorkflowBuilder**
