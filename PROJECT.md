@@ -493,6 +493,10 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 
 - **fix: duplicate `_id` in `FieldConfig` interface** — removed second declaration that caused TS2300 build error
 
+- **fix: AI chat workflow JSON extraction**
+  - Added `_extract_json_array()` helper in `ai_chat.py` — strips markdown code fences, uses regex to find JSON arrays even when model prepends prose
+  - When JSON is parsed successfully, backend returns a clean summary reply ("Workflow ready: N steps, M fields.") rather than raw JSON, so the frontend `WorkflowActionBubble` renders correctly
+
 ### 2026-03-03
 - **OCR Document Reader field type in admin WorkflowBuilder**
   - Added `ocr_reader` to `FIELD_TYPES` array in `WorkflowBuilder.tsx`
