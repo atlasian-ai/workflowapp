@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Trash2, ChevronDown, ChevronUp, Lock, GripVertical } from 'lucide-react'
 import {
@@ -485,10 +485,15 @@ function StepRow({
 }) {
   const [expanded, setExpanded] = useState(true)
   const [activeFieldId, setActiveFieldId] = useState<string | null>(null)
-  // Ensure all fields have a _id for DnD (fields loaded from DB may not have one)
-  const fieldsWithIds = step.form_fields.map((f) =>
-    f._id ? f : { ...f, _id: generateId() }
-  )
+  // Stable ID map: field_id → internal DnD _id (persists across renders)
+  const fieldIdMap = useRef<Map<string, string>>(new Map())
+  const fieldsWithIds = step.form_fields.map((f) => {
+    if (f._id) return f
+    if (!fieldIdMap.current.has(f.field_id)) {
+      fieldIdMap.current.set(f.field_id, generateId())
+    }
+    return { ...f, _id: fieldIdMap.current.get(f.field_id)! }
+  })
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -506,23 +511,23 @@ function StepRow({
   }
 
   const updateField = (i: number, f: FieldConfig) => {
-    const fields = [...step.form_fields]
+    const fields = [...fieldsWithIds]
     fields[i] = f
     onChange({ ...step, form_fields: fields })
   }
 
   const deleteField = (i: number) => {
-    onChange({ ...step, form_fields: step.form_fields.filter((_, j) => j !== i) })
+    onChange({ ...step, form_fields: fieldsWithIds.filter((_, j) => j !== i) })
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
     setActiveFieldId(null)
     const { active, over } = event
     if (!over || active.id === over.id) return
-    const oldIndex = step.form_fields.findIndex((f) => (f._id || f.field_id) === active.id)
-    const newIndex = step.form_fields.findIndex((f) => (f._id || f.field_id) === over.id)
+    const oldIndex = fieldsWithIds.findIndex((f) => f._id === active.id)
+    const newIndex = fieldsWithIds.findIndex((f) => f._id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
-    onChange({ ...step, form_fields: arrayMove(step.form_fields, oldIndex, newIndex) })
+    onChange({ ...step, form_fields: arrayMove(fieldsWithIds, oldIndex, newIndex) })
   }
 
   const activeField = activeFieldId ? fieldsWithIds.find((f) => f._id === activeFieldId) : null
