@@ -63,26 +63,74 @@ class ChatResponse(BaseModel):
 # ── Workflow JSON schema description ──────────────────────────────────────────
 
 WORKFLOW_SCHEMA = """
-A workflow definition is a JSON array of steps. Each step has:
-{
-  "step_id": <integer, sequential starting at 1>,
-  "step_name": <string, machine name like "step_1">,
-  "step_label": <string, human readable label>,
-  "approvers": <array of email strings, or [] if no approval needed>,
-  "form_fields": [
-    {
-      "field_id": <string, snake_case unique id>,
-      "field_label": <string, human readable>,
-      "field_type": <one of: "textbox", "textarea", "number", "date", "dropdown", "radio", "checkbox", "file_upload", "calculated", "table">,
-      "required": <boolean>,
-      "placeholder": <string, optional>,
-      "options": <array of strings, only for dropdown/radio/checkbox>,
-      "formula": <string, only for calculated fields, uses {field_id} references>
-    }
-  ]
-}
+A workflow definition is a JSON array of steps. Each step object:
 
-Return ONLY the JSON array with no markdown, no code fences, no extra explanation.
+  step_id       integer — sequential, starting at 1
+  step_name     string  — snake_case machine name derived from step_label
+                          (e.g. "Purchase Request" → "purchase_request")
+  step_label    string  — human-readable label shown in the UI
+  approvers     array   — who must approve this step before it advances.
+                          Each entry must be "user:email@example.com" or "group:groupname".
+                          Use [] if no approval is required for this step.
+  form_fields   array   — list of field objects (see below)
+
+Each form_field object:
+
+  field_id      string  — unique snake_case identifier within the workflow
+                          (e.g. "vendor_name", "total_amount")
+  field_label   string  — human-readable label shown above the input
+  field_type    string  — MUST be exactly one of:
+                            "textbox"     single-line text
+                            "textarea"    multi-line text
+                            "number"      numeric input
+                            "date"        date picker
+                            "dropdown"    select from options list
+                            "checkbox"    boolean tick box
+                            "file_upload" file attachment
+                            "calculated"  auto-computed from other fields
+  required      boolean — true if the field must be filled before submitting
+  placeholder   string  — optional hint text inside the input
+  options       array   — REQUIRED for "dropdown"; list of option strings
+                          e.g. ["Option A", "Option B"]
+  formula       string  — REQUIRED for "calculated"; arithmetic expression
+                          using other field_id names directly (no braces).
+                          e.g. "quantity * unit_price"
+                          Supports +  -  *  /  and parentheses.
+
+RULES:
+- field_id values must be unique across the entire workflow (all steps)
+- step_id must be sequential integers starting at 1
+- Only include "options" for dropdown fields
+- Only include "formula" for calculated fields
+- Do not use field types other than the 8 listed above
+
+EXAMPLE — a simple 2-step Purchase Request workflow:
+[
+  {
+    "step_id": 1,
+    "step_name": "purchase_request",
+    "step_label": "Purchase Request",
+    "approvers": [],
+    "form_fields": [
+      {"field_id": "vendor_name", "field_label": "Vendor Name", "field_type": "textbox", "required": true, "placeholder": "e.g. Acme Corp"},
+      {"field_id": "item_description", "field_label": "Item Description", "field_type": "textarea", "required": true},
+      {"field_id": "quantity", "field_label": "Quantity", "field_type": "number", "required": true},
+      {"field_id": "unit_price", "field_label": "Unit Price (AUD)", "field_type": "number", "required": true},
+      {"field_id": "total_amount", "field_label": "Total Amount", "field_type": "calculated", "required": false, "formula": "quantity * unit_price"},
+      {"field_id": "urgency", "field_label": "Urgency", "field_type": "dropdown", "required": true, "options": ["Low", "Medium", "High"]},
+      {"field_id": "needed_by", "field_label": "Needed By", "field_type": "date", "required": false}
+    ]
+  },
+  {
+    "step_id": 2,
+    "step_name": "manager_approval",
+    "step_label": "Manager Approval",
+    "approvers": ["group:managers"],
+    "form_fields": [
+      {"field_id": "approval_notes", "field_label": "Approval Notes", "field_type": "textarea", "required": false}
+    ]
+  }
+]
 """
 
 
@@ -176,14 +224,15 @@ async def chat(
             "following this schema exactly:\n\n"
             f"{WORKFLOW_SCHEMA}\n\n"
             "If the user asks a question or gives feedback without requesting a workflow, "
-            "reply in plain text to help them refine their request. "
+            "reply in plain text to help them refine their request.\n"
             "When you do return a workflow JSON, output ONLY the raw JSON array — "
-            "no markdown, no code fences, no explanation before or after."
+            "no markdown, no code fences, no prose before or after. "
+            "The first character of your response must be '[' and the last must be ']'."
         )
 
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=2048,
+            model="claude-sonnet-4-6",
+            max_tokens=4096,
             system=system_prompt,
             messages=messages,
         )
