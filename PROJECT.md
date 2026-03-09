@@ -67,7 +67,7 @@ ForgeflowPoC is a configurable workflow / form-routing application that lets adm
   │  ─ Storage     │   └────────┬────────────┘
   └────────────────┘            │
                        ┌────────▼────────────┐
-                       │  Upstash Redis       │
+                       │  Railway Redis       │
                        │  (Celery broker +   │
                        │   result backend)   │
                        └─────────────────────┘
@@ -87,7 +87,7 @@ ForgeflowPoC is a configurable workflow / form-routing application that lets adm
 |---|---|---|
 | **Railway** | Hosts React SPA, FastAPI API, and Celery worker as three separate services | Auto-deploys from `main` branch push |
 | **Supabase** | Auth (magic link / password), PostgreSQL DB, file Storage | JWT issued by Supabase, verified by backend |
-| **Upstash Redis** | Celery broker and result store | Serverless Redis, free tier sufficient for PoC |
+| **Railway Redis** | Celery broker and result store | Railway Redis plugin; `REDIS_URL` auto-injected into API and Worker services |
 | **Anthropic API** | Claude Haiku for OCR field extraction and AI chat | Key stored in Railway backend env vars |
 
 ### Railway services
@@ -210,7 +210,7 @@ reference_lists
 | `app/services/ocr_service.py` | Claude Haiku OCR extraction |
 | `app/routers/user/ai_chat.py` | `POST /ai/chat` — data query and workflow builder AI modes |
 | `app/services/storage_service.py` | Supabase Storage upload/download/URL |
-| `app/workers/celery_app.py` | Celery app config (Upstash Redis) |
+| `app/workers/celery_app.py` | Celery app config (Railway Redis) |
 | `app/workers/tasks.py` | `ocr_extract_task` — async OCR Celery task |
 | `alembic/` | Migration scripts |
 | `start.sh` | Railway entry: `alembic upgrade head && uvicorn ...` |
@@ -400,7 +400,7 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 | **Workflow config stored as JSON** in the definition | Flexible schema — fields, steps, approvers all vary per workflow without DB migrations |
 | **`config_snapshot` on completion** | Prevents completed instance records from being silently altered when an admin edits the workflow definition |
 | **Celery for OCR** | Claude API calls can take 5–30 seconds; async task prevents API timeout and allows frontend to poll |
-| **Upstash Redis** (not self-hosted) | Serverless — no Redis VM to manage; fits Railway PoC deployment |
+| **Railway Redis plugin** | Keeps all infra on one platform; `REDIS_URL` auto-injected into sibling services; no SSL workaround needed (plain `redis://`) |
 | **Rejection is non-terminal** | Preparer can edit and resubmit without creating a new instance; keeps the audit trail on one record |
 | **Approvals created at submit time** (not instance creation) | Approvers only see items actually ready for their review; avoids empty approval records for steps not yet reached |
 | **pypdf for page counting** | Lightweight pure-Python, no system binary needed; graceful fallback if it can't parse |
@@ -460,6 +460,14 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 ---
 
 ## 14. Changelog
+
+### 2026-03-09
+
+- **Infra: replaced Upstash Redis with Railway Redis plugin**
+  - `settings.upstash_redis_url` renamed to `settings.redis_url` (reads `REDIS_URL` env var)
+  - Railway Redis plugin auto-injects `REDIS_URL` into all sibling services (API + Worker)
+  - Removed SSL workaround block from `celery_app.py` — Railway Redis uses plain `redis://`
+  - Updated `.env.example` accordingly
 
 ### 2026-03-07
 
