@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     r2_bucket_name: str = "workflowapp-files"
     r2_public_url: str = ""
 
-    # Upstash Redis
-    upstash_redis_url: str = "redis://localhost:6379"
+    # Redis (Railway Redis plugin injects REDIS_URL automatically)
+    redis_url: str = "redis://localhost:6379"
 
     # Anthropic
     anthropic_api_key: str = ""
