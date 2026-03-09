@@ -86,7 +86,8 @@ Each form_field object:
                             "date"        date picker
                             "dropdown"    select from options list
                             "checkbox"    boolean tick box
-                            "file_upload" file attachment
+                            "file_upload" plain file attachment (no AI extraction)
+                            "ocr_reader"  upload a document and have AI extract fields from it
                             "calculated"  auto-computed from other fields
   required      boolean — true if the field must be filled before submitting
   placeholder   string  — optional hint text inside the input
@@ -96,13 +97,22 @@ Each form_field object:
                           using other field_id names directly (no braces).
                           e.g. "quantity * unit_price"
                           Supports +  -  *  /  and parentheses.
+  accepted_formats  array  — for "ocr_reader" only; subset of ["pdf", "png", "jpg"].
+                             Defaults to all three if omitted.
+  extract_fields    object — REQUIRED for "ocr_reader"; maps target field_id → description
+                             for what the AI should extract. The target field_id must match
+                             another field elsewhere in the workflow that will receive the value.
+                             e.g. {"invoice_number": "invoice number at the top of the document",
+                                   "total_amount": "total amount due including tax"}
 
 RULES:
 - field_id values must be unique across the entire workflow (all steps)
 - step_id must be sequential integers starting at 1
 - Only include "options" for dropdown fields
 - Only include "formula" for calculated fields
-- Do not use field types other than the 8 listed above
+- Only include "accepted_formats" and "extract_fields" for ocr_reader fields
+- Use "ocr_reader" (not "file_upload") whenever the user wants to extract data from a document
+- Do not use field types other than the 9 listed above
 
 EXAMPLE — a simple 2-step Purchase Request workflow:
 [
