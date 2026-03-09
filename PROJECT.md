@@ -1,7 +1,7 @@
 # ForgeflowPoC — Project Reference
 
 > **Status:** Proof of Concept
-> **Deployed on:** Railway (frontend + backend + Celery worker)
+> **Deployed on:** Railway (two services: frontend + API; Celery worker co-located in the API container)
 > **Repo root:** `workflowapp/`
 
 ---
@@ -61,21 +61,15 @@ ForgeflowPoC is a configurable workflow / form-routing application that lets adm
 └───────────┬───────────────────┬─────────────────┘
             │                   │
   ┌─────────▼──────┐   ┌────────▼────────────┐
-  │  Supabase      │   │  Railway — Worker    │
-  │  ─ Auth (JWT)  │   │  Celery 5 worker     │
-  │  ─ PostgreSQL  │   │  (OCR async tasks)   │
+  │  Supabase      │   │  Railway Redis       │
+  │  ─ Auth (JWT)  │   │  (Celery broker +    │
+  │  ─ PostgreSQL  │   │   result backend)    │
   │  ─ Storage     │   └────────┬────────────┘
   └────────────────┘            │
                        ┌────────▼────────────┐
-                       │  Railway Redis       │
-                       │  (Celery broker +   │
-                       │   result backend)   │
-                       └─────────────────────┘
-                                │
-                       ┌────────▼────────────┐
                        │  Anthropic API       │
                        │  Claude Haiku        │
-                       │  (OCR extraction)   │
+                       │  (OCR + AI chat)    │
                        └─────────────────────┘
 ```
 
@@ -85,18 +79,15 @@ ForgeflowPoC is a configurable workflow / form-routing application that lets adm
 
 | Service | Purpose | Notes |
 |---|---|---|
-| **Railway** | Hosts React SPA, FastAPI API, and Celery worker as three separate services | Auto-deploys from `main` branch push |
+| **Railway** | Two services: `workflowapp-frontend` (static SPA) and `workflowapp-api` (FastAPI + Celery worker co-located via `start.sh`) | Auto-deploys from `main` branch push |
 | **Supabase** | Auth (magic link / password), PostgreSQL DB, file Storage | JWT issued by Supabase, verified by backend |
-| **Railway Redis** | Celery broker and result store | Railway Redis plugin; `REDIS_URL` auto-injected into API and Worker services |
+| **Railway Redis** | Celery broker and result store | Railway Redis plugin; `REDIS_URL` auto-injected into `workflowapp-api` |
 | **Anthropic API** | Claude Haiku for OCR field extraction and AI chat | Key stored in Railway backend env vars |
 
 ### Railway services
 
-- **Frontend service** — builds with `npm install && npm run build`, serves the `dist/` static site
-- **API service** — runs `start.sh`: applies Alembic migrations then starts `uvicorn`
-- **Worker service** — runs `celery -A app.workers.celery_app worker --loglevel=info`
-
-The API and Worker share the same Docker image (`backend/Dockerfile`). Environment variables are set per-service in Railway.
+- **`workflowapp-frontend`** — builds with `npm install && npm run build`, serves the `dist/` static site
+- **`workflowapp-api`** — runs `start.sh`: launches Celery worker in background, then starts Uvicorn in foreground; both processes share the same container and env vars
 
 ---
 
@@ -434,7 +425,7 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 
 ## 13. Environment Variables
 
-### Backend (Railway — API and Worker services)
+### Backend (Railway — `workflowapp-api` service)
 
 | Variable | Description |
 |---|---|
@@ -465,7 +456,7 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 
 - **Infra: replaced Upstash Redis with Railway Redis plugin**
   - `settings.upstash_redis_url` renamed to `settings.redis_url` (reads `REDIS_URL` env var)
-  - Railway Redis plugin auto-injects `REDIS_URL` into all sibling services (API + Worker)
+  - Railway Redis plugin auto-injects `REDIS_URL` into `workflowapp-api` (used by both Uvicorn and the co-located Celery worker)
   - Removed SSL workaround block from `celery_app.py` — Railway Redis uses plain `redis://`
   - Updated `.env.example` accordingly
 
