@@ -1,11 +1,12 @@
 """AI chat endpoint — data query and workflow builder modes."""
 import json
+import logging
 import re
 from typing import Any
 
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +17,9 @@ from app.models.step_submission import StepSubmission
 from app.models.user import User
 from app.models.workflow_definition import WorkflowDefinition
 from app.models.workflow_instance import WorkflowInstance
+from app.schemas.workflow import WorkflowStep as WorkflowStepSchema
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -252,14 +256,31 @@ async def chat(
         workflow_definition = _extract_json_array(reply_text)
 
         if workflow_definition:
-            # Build a clean summary reply instead of exposing raw JSON in the chat bubble
-            step_count = len(workflow_definition)
-            field_count = sum(len(s.get("form_fields", [])) for s in workflow_definition)
+            # Validate against the same Pydantic schema used by POST /admin/workflows.
+            # This catches type errors, missing required fields, etc. before they reach
+            # the frontend "Create Workflow" button.
+            try:
+                validated = [
+                    WorkflowStepSchema.model_validate(s).model_dump(exclude_none=True)
+                    for s in workflow_definition
+                ]
+            except ValidationError as exc:
+                logger.warning("AI workflow failed schema validation: %s", exc)
+                return ChatResponse(
+                    reply=(
+                        "I generated a workflow but it had structural issues "
+                        f"({exc.error_count()} field error(s)). "
+                        "Please try again with a more detailed description."
+                    )
+                )
+
+            step_count = len(validated)
+            field_count = sum(len(s.get("form_fields", [])) for s in validated)
             clean_reply = (
                 f"Workflow ready: {step_count} step{'s' if step_count != 1 else ''}, "
                 f"{field_count} field{'s' if field_count != 1 else ''}."
             )
-            return ChatResponse(reply=clean_reply, workflow_definition=workflow_definition)
+            return ChatResponse(reply=clean_reply, workflow_definition=validated)
 
         return ChatResponse(reply=reply_text)
 

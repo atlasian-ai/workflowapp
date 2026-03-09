@@ -201,7 +201,11 @@ export default function AiChatPanel() {
                         onViewWorkflows={() => { setOpen(false); navigate('/admin/workflows') }}
                         isCreating={createMutation.isPending}
                         createdId={createdId}
-                        error={createMutation.isError ? 'Failed to create workflow.' : null}
+                        error={createMutation.isError
+        ? ((createMutation.error as any)?.response?.data?.detail
+            ? 'Validation error — try regenerating the workflow.'
+            : 'Failed to save. Try regenerating the workflow.')
+        : null}
                       />
                     ) : (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
