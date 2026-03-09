@@ -12,7 +12,7 @@ A multi-tenant SaaS workflow management platform. Admins define business process
 | Database | Supabase Postgres |
 | Auth | Supabase Auth (JWT) |
 | File Storage | Supabase Storage |
-| Background Tasks | Celery + Upstash Redis |
+| Background Tasks | Celery + Railway Redis |
 | OCR | Claude API (claude-haiku-4-5) |
 | Frontend | React 18 + Vite + Tailwind + Shadcn |
 
@@ -23,7 +23,7 @@ A multi-tenant SaaS workflow management platform. Admins define business process
 | Platform | Role | What it does |
 |---|---|---|
 | **Supabase** | Database + Auth + Storage | Hosts the Postgres database, handles user authentication (JWT), and stores all uploaded files in Supabase Storage buckets |
-| **Upstash** | Redis (message broker) | Provides the Redis instance used by Celery as a message broker and result backend for background OCR tasks |
+| **Railway** | Redis (message broker) | Provides the Redis instance used by Celery as a message broker and result backend for background OCR tasks |
 | **Railway** | Hosting (backend + frontend) | Hosts the FastAPI backend (Docker container running Uvicorn + Celery) and serves the React frontend as a static web service |
 
 ---
