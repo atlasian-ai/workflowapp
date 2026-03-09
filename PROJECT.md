@@ -400,7 +400,7 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 | **Single-file Supabase Storage** uploads | Each file gets a UUID-keyed path; no naming conflicts; URL presigned for download |
 | **Admin role management** | Role promotion handled via admin UI to control access |
 | **Step assignment / full delegation** | Instance creator or admin assigns a step to another user; assignee sees the instance in their Dashboard and has exclusive edit/submit rights on that step; others see read-only |
-| **AI chat — synchronous Claude call** | Acceptable latency for PoC; avoids Celery complexity; data_query mode injects user's instances + step data as context; workflow_builder mode returns raw JSON for the WorkflowBuilder |
+| **AI chat — synchronous Claude call** | Acceptable latency for PoC; avoids Celery complexity; `data_query` uses Haiku (fast, low cost); `workflow_builder` uses Sonnet 4.6 (higher accuracy for structured JSON output) |
 | **AI chat workflow creation via API** | `workflow_builder` mode creates the workflow directly via `POST /admin/workflows` (saved as draft); `useAiStore` / Zustand handoff is kept but no longer the primary path |
 | **DnD field reordering uses `_id` ephemeral key** | `_id` is generated client-side for stable DnD identity and stripped before saving to DB; fields loaded from DB get `_id` auto-assigned via `fieldsWithIds` |
 | **Status tile click filtering** | Simple `useState` toggle; combined with existing text search; active tile shows ring highlight and clear button above the list |
@@ -453,6 +453,14 @@ Steps are sorted by `step_id` integer ascending. `step_id` values do not need to
 ## 14. Changelog
 
 ### 2026-03-09
+
+- **improve: AI workflow_builder prompt accuracy**
+  - Fixed field types in schema (removed non-existent `radio`/`table`; corrected list to 8 supported types)
+  - Fixed approvers format: `user:email` / `group:name` (was documenting bare email strings)
+  - Fixed `calculated` formula syntax: bare `field_id` references, not `{field_id}`
+  - Added detailed per-field rules and a complete 2-step example in the system prompt
+  - Upgraded `workflow_builder` model from `claude-haiku-4-5-20251001` → `claude-sonnet-4-6` for better structured JSON accuracy
+  - Increased `max_tokens` 2048 → 4096 to prevent JSON truncation on larger workflows
 
 - **Infra: replaced Upstash Redis with Railway Redis plugin**
   - `settings.upstash_redis_url` renamed to `settings.redis_url` (reads `REDIS_URL` env var)
